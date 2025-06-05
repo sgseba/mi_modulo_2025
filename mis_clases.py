@@ -1846,3 +1846,6 @@ if anova_resultado['Pr(>F)'][1] < 0.05:
     print("El modelo completo mejora significativamente.")
 else:
     print("El modelo completo NO mejora significativamente.")
+
+
+# AGREGO COMENTARIO PARA modificar archivo en nueva_rama de c:/ussers/sebag/mimodulo y luego subirlo a git hub 05-06-25
