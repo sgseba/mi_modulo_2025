@@ -1542,6 +1542,95 @@ class RegresionLogistica():
     print('Especificidad:', especificidad_p)
     print("AUC:", roc_auc)
 
+"""#7. Test de bondad de ajuste Chi2"""
+
+from scipy.stats import chi2
+
+class mi_test_chi2:
+  ''' Evalúa bondad de ajuste de distribución, pensado para variables categóricas (cualitativas): solamente quiero saber si los valores observados se aproximan a los esperados según la distribución propuesta.
+
+    Implementa test chi2 para bondad de ajuste de distribución.
+        - H0: distribución = modelo
+        - H1: distribución \neq modelo
+
+    - Recibe:
+        - 2 arrays (valores observados y valores estimados por modelo), y nivel alfa para región de rechazo.
+        - k = número de parámetros del modelo que fueron calculados con la muestra (Ej: Media o varianza => k=1.  Ambas: k=2).
+        - alfa es 0.05 por defecto
+    - Métodos:
+        - _calculo_chi2_: el parámetro de bondad (chi2)
+        - testeo_chi2: creo {resultado} del test
+        - imprimir_informe: imprime el informe del test
+    - Retorna:
+        - valores: p-valor, chi2 observado, valor chi2 teórico, grados de libertad, conclusión
+
+    - Ejemplo de uso:
+        test2 = mi_test_chi2(valores_obervados, valores_esperados, k=0, alfa=0.01)
+        test2.testeo_chi2()
+        test2.imprimir_informe()
+  '''
+
+  def __init__(self, Obs, Est, k = 0, alfa = 0.05):
+    self.obs = Obs
+    self.est = Est
+    if len(Obs) != len(Est) or (len(Obs)==0) or (len(Est)==0):
+      print("Datos incorrectos.")
+      pass
+    self.N = len(Obs)
+    self.k = k
+    self.alfa = alfa
+    self.resultado = None
+
+  def _calculo_chi2_(self):
+    # Calcula el parámetro chi2 a partir de los datos observados y los estimados por modelo.
+
+    O = self.obs
+    E = self.est
+    chi2_obs = sum(((O - E)**2)/E)
+    return chi2_obs
+
+  def testeo_chi2(self):
+    # LLama _calculo_chi2_ para el estadístico observado, obtiene el teórico para el alfa y los gl dados. Emite resultado (diccionario).
+    N = self.N
+    k = self.k
+    alfa = self.alfa                     # alfa: significancia
+    gl = N - 1 - k                       # grados de libertad
+    chi2_obs = self._calculo_chi2_()     # estadístico calculado (observado)
+    chi2_teor = chi2.ppf(1 - alfa,gl)    # estadístico tabulado
+    p_valor = 1 - chi2.cdf(chi2_obs,gl)  # p-valor
+    if p_valor <= alfa:                  # conclusión
+      informe = 'Hay evidencia para rechazar H0: el modelo NO es adecuado.'
+    else:
+      informe = 'No hay evidencia para rechazar H0: el modelo ES adecuado.'
+    self.resultado = {'p-valor': p_valor,
+                  'chi2_obs': chi2_obs,
+                  'chi2_teorico': chi2_teor,
+                  'alfa': alfa,
+                  'gl': gl,
+                  'informe': informe}
+
+
+  def imprimir_informe(self):
+    if self.resultado == None:
+      print('No se evaluaron los datos.')
+      return
+    else:
+      resultado = self.resultado
+    print("INFORME TEST DE BONDAD DE AJUSTE (Chi2)")
+    print("=======================================")
+    print("H0: el modelo propuesto ajusta los datos adecuadamente")
+    print("H1: el modelo propuesto NO ajusta los datos adecuadamente")
+    print("---------------------------------------------------------")
+    print(f"Nivel de significancia (alfa):{resultado['alfa']}                Grados de libertad: {resultado['gl']}")
+    print(f"Estadístico chi2 observado: {resultado['chi2_obs']:.5f}                Estadístico chi2 teórico: {resultado['chi2_teorico']:.5f}")
+    print(f"                                  p-valor: {resultado['p-valor']:.5f}")
+    print("=======================================")
+    print("Conclusión del test")
+    print("-------------------")
+    print(resultado['informe'])
+
+
+
 """# Otros"""
 
 from google.colab import drive
@@ -1846,6 +1935,3 @@ if anova_resultado['Pr(>F)'][1] < 0.05:
     print("El modelo completo mejora significativamente.")
 else:
     print("El modelo completo NO mejora significativamente.")
-
-
-# AGREGO COMENTARIO PARA modificar archivo en nueva_rama de c:/ussers/sebag/mimodulo y luego subirlo a git hub 05-06-25
