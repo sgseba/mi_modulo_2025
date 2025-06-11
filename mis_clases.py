@@ -7,12 +7,539 @@ Original file is located at
     https://colab.research.google.com/drive/1SYZ6IMuqosf5AAsDFcdl9p3ZpcZmQC8R
 """
 
-# Funciona OK. 02-06-25
-import random
+# 11-06-25: modificaciones menores: low, high, loc, scale.
+class GeneradoraDeDatos:
+  # Recibe n entero = cantidad de datos a generar.
+  def __init__(self, n):
+    self.n = n
 
+  def genera_datos_dist_uniforme(self, inf=0, sup=1):
+    # Usa n, devuelve array de datos con distrib uniforme.
+    return np.random.uniform(low=inf, high=sup, size=self.n)
+
+  def genera_datos_dist_norm(self, media=0, desvio=1):
+    # Usa n. Puede recibir media, desvío. Devuelve array de datos con distrib N(media,desvio).
+    return np.random.normal(loc=media,scale=desvio, self.n)
+
+  def genera_datos_BS(self):
+    # Usa n, devuelve array de datos_BS ~ N(0,1), Bart Simpson
+    y = 0.5 + np.random.normal(0,1,self.n)
+    for j in range(5):
+      y += 0.1 * np.random.normal(0.5*j - 1, 0.1,self.n)
+    return y
+
+  def densidad_normal(self, x, media=0, desvio=1):
+    # Recibe x, array de grilla. Puede recibir media, desvío.
+    # Devuelve la densidad de probabilidad N(0,1).
+    return norm.pdf(x,loc=media,scale=desvio)
+
+# 11-06-25: eliminé sum en kernel_gauss y kernel_unif (estaba en mi_densidad), y agregué _ a algunos métodos.
+class Estimacion:
+  def __init__(self, datos):
+      self.datos = datos
+
+  def genera_histograma(self, h):
+    # Genera histograma.
+    # Necesita datos y h (ventana).
+    # Retorna puntos separadores de bins y recuento de cada bin.
+
+    bins = np.arange(min(self.datos), max(self.datos)+h,h)
+    histo = np.zeros(len(bins)-1)
+    for dato in self.datos:
+      for i in range(len(histo)):
+        if bins[i] <= dato < bins[i+1]:
+          histo[i] +=1
+          break
+    histo /= (len(self.datos) * h)
+    return bins, histo
+
+  def evalua_histograma(self, h, x):
+      # Utiliza genera_histograma, a partir de datos y h,  como función de densidad para estimar las probabilidades en x.
+
+      bins, frec = self.genera_histograma(h)
+      estim_hist = np.zeros(len(x))
+      for j in range(len(x)):
+        for i in range(len(bins)-1):
+            if bins[i] <= x[j] < bins[i+1]:
+              estim_hist[j] = frec[i]
+              break
+      return estim_hist
+
+
+  def _caracteristica (self,x,int_inf, int_sup):
+    # Recibe x.
+    # Devuelve 1 si x en (,), 0 si no.
+    return 1*((x>int_inf) & (x<int_sup))
+
+  def _kernel_gaussiano(self,x):
+    # Kernel gaussiano estándar
+    # Recibe x, devuelve K(x)
+    valor_kernel_gaussiano = (1/np.sqrt(2*np.pi)) * np.exp(-x**2/2)
+    return valor_kernel_gaussiano
+
+  def _kernel_uniforme(self,x):
+    # Kernel uniforme estándar
+    # Recibe x, devuelve K(x)
+    valor_kernel_uniforme = 0.5*self._caracteristica(x,-1,1)
+    return valor_kernel_uniforme
+
+  def _kernel_cuadra(self,x):
+    # Kernel cuadrático estándar
+    # Recibe x, devuelve K(x)
+    return 0.75*(1-x**2) * self._caracteristica(x, -1, 1)
+
+  def _kernel_triangu(self,x):
+    # Kernel triangular estándar
+    # Recibe x, devuelve K(x)
+    return (1+x)*self._caracteristica(x,-1,0) + (1-x)*self._caracteristica(x,0,1)
+
+  def mi_densidad(self, x, h, kernel):
+    # Recibe x: Puntos en los que se evaluará la densidad.
+    # Recibe h: Ancho de la ventana (bandwidth).
+    # Recibe kernel: string del kernel a usar.
+    # Usa: self.datos: Datos
+
+    n = len(x)
+    density = np.zeros_like(x)
+    for i in range(n):
+
+        if kernel in ['uniforme', 'Uniforme', 'KUnif']:
+          density[i] = np.sum(self._kernel_uniforme((self.datos - x[i])/h))
+
+        elif kernel in ['gauss', 'Gauss', 'gaussiano', 'Gaussiano', 'KGauss']:
+          density[i] = np.sum(self._kernel_gaussiano((self.datos - x[i])/h))
+
+        elif kernel in ['cuadra', 'Cuadra', 'KCuadra', 'Cuadra','Cuadrado', 'KCuadrado']:
+          density[i] = np.sum(self._kernel_cuadra((self.datos - x[i])/h))
+
+        elif kernel in ['triangu', 'Triangu', 'KTriangu', 'triangular', 'Triangular', 'KTriangular']:
+          density[i] = np.sum(self._kernel_triangu((self.datos - x[i])/h))
+
+    return density / (len(self.datos)*h)
+
+  def miqqplot(self):
+
+    cuantiles = np.arange(1,11)/11
+    cuantiles_teoricos = norm.ppf(cuantiles)
+
+    data_ord = np.zeros_like(cuantiles)
+    for i in range(len(cuantiles)):
+      data_ord[i] = np.sort(self.datos)[int(cuantiles[i]*len(self.datos)) - 1]
+    cuantiles_muestrales = (data_ord - np.mean(self.datos))/np.std(self.datos)
+
+    plt.scatter(cuantiles_teoricos, cuantiles_muestrales, color='blue', marker='o')
+    plt.xlabel('Cuantiles teóricos')
+    plt.ylabel('Cuantiles muestrales')
+    plt.plot(cuantiles_teoricos,cuantiles_teoricos , linestyle='-', color='red')
+    plt.show()
+
+  def qqpplot_teorico(self):
+    sm.qqplot((self.datos-np.mean(self.datos))/np.std(self.datos), line='45')
+    plt.title('QQ Plot')
+    plt.show()
+
+# 11-06-25: correcciones menores: asarray, saco return self.resumen, cambié self.calcular_regresion() en grafico_scatter por el if,
+# VERSION REDUCIDA 27-04-25: manual y con statsmodels
+import numpy as np
+from scipy.stats import norm
+from scipy.stats import t
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+
+class RegresionLinealSimple():
+
+    # Recibe los datos como 2 ARRAY SIN ENCABEZADO y los convierte en array de numpy
+    # x variable predictora=keys(), y variable respuesta=values().
+    # Método grafico_scatter_y_lineal: genera la recta con b0 y b1, y grafica datos y recta.
+    # Método estimar_y: genera los datos estimados a partir de x.
+    # Método calcular_residuos: y_estim - y_dato
+    # Método calcular_varianza_residuos: da eso.
+    # Método t_obs: calcula el t_obs para b1.
+    # Método calcula_region_rechazo: dado alfa, calcula el t_critico para la región de rechazo de H0: b1=0.
+
+  def __init__(self,datos_y, datos_x, label_y='y', label_x='x'):
+      self.datos_x = np.asarray(datos_x, dtype=float)
+      self.datos_y = np.asarray(datos_y, dtype=float)
+      self.datos_x_label = label_x
+      self.datos_y_label =
+      self.resumen = {}
+
+  def calcular_regresion(self):
+      # Calcula los atributos esenciales del modelo de regresión lineal simple.
+        #- Parámetros b0,b1
+        #- y_estimada por la regresión
+        #- residuos: datos originales - estimados
+        #- varianza_residuos
+        #- varianza_b1
+        #- varianza_b0
+        #- t_critico_05: valor de la distribución teórica t, con (n-2) gl, alfa=0.05
+        #- t_obs_b1: valor de la distribución t para el valor observado de b1.
+        #- p_valor_b1: p-valor para el valor t_obs_b1, bilateral, alfa=0.05 (0.025-0.975)
+      # Métodos:
+        #- Calcular graficar dispersión de datos originales y recta de ajuste
+        #- Calcular t_obs_b1_otro para testear H0: b1=otro_valor, H1: !=otro_valor  (por DEFECTO=0)
+        #- Calcular t_obs_b0_otro para testear H0: b0=otro_valor, H1: !=otro_valor  (por DEFECTO=0)
+        #- Calcular t_critico bilateral para otro alfa (por DEFECTO=0.05)
+        #- Calcular intervalo de confianza para la media de y, dado x0.
+        #- Calcular intervalo de predicción puntual para y, dado x0.
+
+      ## ATRIBUTOS
+      # Estimadores de los parámetros: b0_est y b1_est
+      self.b1_est = np.sum((self.datos_x - np.mean(self.datos_x)) * (self.datos_y - np.mean(self.datos_y))) / np.sum((self.datos_x -  np.mean(self.datos_x))**2)       #m_11 / m_20
+      self.b0_est = np.mean(self.datos_y) - self.b1_est * np.mean(self.datos_x)
+
+      # Predichos y_estimada
+      self.y_estimada = self.b0_est + self.b1_est * self.datos_x
+
+      # Residuos: y-y_estimada
+      self.residuos = self.datos_y - self.y_estimada
+
+      # Estimador de varianza de residuos sigma^2
+      self.sigma2_est = np.sum(self.residuos**2)/(len(self.datos_x)-2)
+
+      # Estimador de varianza b1_estimador
+      self.varianza_b1_est = self.sigma2_est / np.sum((self.datos_x - np.mean(self.datos_x))**2)
+
+      # Estimador de varianza b0_estimador
+      self.varianza_b0_est = self.sigma2_est * np.sum(self.datos_x**2)/ (len(self.datos_x) * np.sum((self.datos_x - np.mean(self.datos_x))**2))
+
+      # Calcula t_critico_05 para datos_x, alfa =0.05.
+      alfa = 0.05
+      self.t_critico_05 = t.ppf(1-(alfa/2),len(self.datos_x)-2)
+
+      # Calcula t_obs_b1 para H0: b1=0, H1: !=0.
+      self.t_obs_b1 = self.b1_est/np.sqrt(self.varianza_b1_est)
+
+      # Calcula t_obs_b0 para H0: b0=0, H1: !=0.
+      self.t_obs_b0 = self.b0_est/np.sqrt(self.varianza_b0_est)
+
+      # Calcula el p_valor para H0: b1 = 0, H1: != 0.
+      self.p_valor_b1= 2*(1-t.cdf(np.abs(self.t_obs_b1),len(self.datos_x)-2))
+
+      # Creo resumen diccionario
+      self.resumen = {'b0_est': self.b0_est,
+                      'b1_est': self.b1_est,
+                      'y_est': self.y_estimada,
+                      'residuos': self.residuos,
+                      'varianza_residuos_est': self.sigma2_est,
+                      'varianza_b0_est': self.varianza_b0_est,
+                      'desvio_b0_est': np.sqrt(self.varianza_b0_est),
+                      'varianza_b_est': self.varianza_b1_est,
+                      'desvio_b1_est': np.sqrt(self.varianza_b1_est),
+                      't_critico_05': self.t_critico_05,
+                      't_obs_b0': self.t_obs_b0,
+                      't_obs_b1': self.t_obs_b1,
+                      'p_valor_b1': self.p_valor_b1}
+
+
+  def imprimir_resumen(self):
+    print('Resumen de la regresión lineal simple:')
+    print('--------------------------------------')
+    for key, value in self.resumen.items():
+      if key not in ['y_est', 'residuos']:
+        print(f'{key}: {value}')
+    print('--------------------------------------')
+
+  def grafico_scatter_y_lineal(self):
+      # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
+      if 'y_est' in self.resumen:
+        self.y_estimada = self.resumen['y_est']
+      else:
+        self.calcular_regresion()
+        self.y_estimada = self.resumen['y_est']
+
+      plt.figure(figsize=(10, 6))
+      plt.scatter(self.datos_x, self.datos_y, label="Datos")
+      plt.plot(self.datos_x, self.y_estimada, label="Recta Estimada", linestyle="--", color="green")
+      plt.xlabel(self.datos_x_label)
+      plt.ylabel(self.datos_y_label)
+      plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
+      plt.legend()
+      plt.show()
+
+  def calcular_t_obs_b1_otro(self, b1_propuesto = 0):
+    # Calcula t_obs_b1_otro para b1 bajo H0: b1 = b1_propuesto, por DEFECTO = 0.
+    self.t_obs_b1_otro = (self.b1_est-b1_propuesto)/np.sqrt(self.varianza_b1_est)
+    return self.t_obs_b1_otro
+
+  def calcular_t_obs_b0_otro(self,b0_propuesto = 0):
+    # Calcula t_obs_b0_otro para b0 bajo H1: b0 = b0_propuesto, por DEFECTO = 0.
+    self.t_obs_b0_otro = (self.b0_est-b0_propuesto)/np.sqrt(self.varianza_b0_est)
+    return self.t_obs_b0_otro
+
+  def calcular_t_critico(self,alfa=0.05):
+    # Calcula el t_critico (teórico = tabulado) para dar el intervalo BILATERAL (alfa/2 para cada lado). Por DEFECTO = 0.05.
+    self.t_critico = t.ppf(1-(alfa/2),len(self.datos_x)-2)
+    print(f'Región RECHAZO: (-∞,- {self.t_critico:.4f}) ∪ ({self.t_critico:.4f},∞)')
+    return self.t_critico
+
+  def calcular_intervalo_confianza(self,x_0, alfa=0.05, pred=False):
+    # Calcula intervalo de confianza para mu_y|x=x_0, dado un valor puntual de x
+    # Si pred=True, calcula intervalo de predicción puntual para y|x=x0.
+    # Necesito coviaranza de (b0_est, b1_est).
+    t_critico = t.ppf(1-(alfa/2),len(self.datos_x)-2)
+    cov_01=-np.mean(self.datos_x)*self.sigma2_est/sum((self.datos_x-np.mean(x))**2)
+    SE2_conf_est=self.varianza_b0_est+(x_0**2)*self.varianza_b1_est+2*x_0*cov_01
+    y0=self.b0_est+self.b1_est*x_0
+
+    intervalo = [y0-t_critico*np.sqrt(SE2_conf_est),y0+t_critico*np.sqrt(SE2_conf_est)]
+
+    print(f'Valor predicho para y|x={x_0}: {y0}')
+
+    if pred:
+      SE2_pred_est=SE2_conf_est + self.sigma2_est
+      intervalo = [y0-t_critico*np.sqrt(SE2_pred_est),y0+t_critico*np.sqrt(SE2_pred_est)]
+      print(f'Intervalo de predicción para y|x={x_0}: [{intervalo[0], {intervalo[1]}}')
+    else:
+        print(f'Intervalo de confianza para mu_y|x={x_0}: [{intervalo[0], {intervalo[1]}}')
+
+    return intervalo
+
+
+## Usando el paquete sm
+  # Métodos:
+    # -calcular_regresion_sm
+    # -calcular_varianza_error_sm : mse_resid (SCE/gl)
+    # -calcular_r2_sm
+    # -calcular_se_betas_sm
+    # -calcular_p_valores_sm
+    # -calcular_int_conf_betas_sm
+    # -calcular_t_obs_b0_sm
+    # -calcular_t_obs_b1_sm
+    # -calcular_int_conf_pred_nuevo_x_sm
+
+  def calcular_regresion_sm(self):
+    self.X = sm.add_constant(self.datos_x)
+    self.modelo = sm.OLS(self.datos_y, self.X)
+    self.resultado = self.modelo.fit()
+    print(self.resultado.summary())
+
+    # Calcula b0,b1
+    self.betas_sm = self.resultado.params
+    print("Parámetros de la regresión:")
+    print("b0:", self.betas_sm.values[0])
+    print("b1:", self.betas_sm.values[1])
+
+    # Calcula la varianza del error
+    self.varianza_error_sm = self.resultado.mse_resid
+    print("Varianza del error:", self.varianza_error_sm)
+
+    # Calcula el coeficiente de determinación
+    self.r2_sm = self.resultado.rsquared
+    print("Coeficiente de determinación:", self.r2_sm)
+
+    # Calcula los desvíos standard para b0 y b1
+    self.se_betas_sm = self.resultado.bse
+    print("Errores estándar de los coeficientes:")
+    print("SE(b0.est):", self.se_betas_sm.values[0])
+    print("SE(b1.est):", self.se_betas_sm.values[1])
+
+    # Calcula el p_valor para H0: bi = 0.
+    self.p_valores_sm = self.resultado.pvalues
+    print("P-valores de los coeficientes:")
+    print("P-valor(b0.est):", self.p_valores_sm.values[0])
+    print("P-valor(b1.est):", self.p_valores_sm.values[1])
+
+  def calcular_t_obs_b0_sm(self, b0_propuesto = 0):
+    # Calcula t_obs para b0 bajo H0: b0 = b0_propuesto, por DEFECTO = 0.
+    self.t_obs_b0_sm = (self.betas_sm.values[0]-b0_propuesto)/self.se_betas_sm.values[0]
+    print("t_obs(b0.est):", self.t_obs_b0_sm)
+    #return self.t_obs_b0_sm
+
+  def calcular_t_obs_b1_sm(self, b1_propuesto = 0):
+    # Calcula t_obs para b1 bajo H0: b1 = b1_propuesto, por DEFECTO = 0.
+    self.t_obs_b1_sm = (self.betas_sm.values[1]-b1_propuesto)/self.se_betas_sm.values[1]
+    print("t_obs(b1.est):", self.t_obs_b1_sm)
+    #return self.t_obs_b1_sm
+
+  def calcular_int_conf_betas_sm(self, alfa=0.05):
+    # Calcula el intervalo de confianza para b0 y b1
+    self.int_conf_betas_sm = self.resultado.conf_int(alpha=alfa)
+    print("Intervalo de confianza para b0.est:", self.int_conf_betas_sm.values[0])
+    print("Intervalo de confianza para b1.est:", self.int_conf_betas_sm.values[1])
+
+  def calcular_int_conf_pred_nuevo_x_sm(self, x_new, alfa=0.05, int_pred=False):
+    # Nuevo punto de predicción
+    self.x_new = x_new
+
+    # Respuesta estimada para x_new
+    self.y_new = self.betas_sm.values[0] + self.betas_sm.values[1] * self.x_new
+    print("Respuesta estimada para x_new:", self.y_new)
+
+    # Crear la matriz de diseño con el nuevo punto de predicción
+    X_new = sm.add_constant(np.array([[1, self.x_new]]))
+
+    # Obtener el intervalo de predicción para el nuevo punto
+    prediccion = self.resultado.get_prediction(X_new)
+    self.int_conf = prediccion.conf_int(alpha =alfa)
+    print("Intervalo de confianza para la respuesta MEDIA a UN valor nuevo:", self.int_conf)
+    if int_pred:
+      self.int_pred = prediccion.conf_int(obs=True, alpha=alfa)
+      print("Intervalo de predicción para la respuesta a UN valor nuevo:", self.int_pred)
+
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import pandas as pd
+
+class RegresionLineal:
+  ''' Implementa Regresion Lineal Simple y Múltiple como clases hijas de Regresion Linal.
+
+  '''
+    def __init__(self, y, x):
+        # x = variables predictora/s
+        # y = variable respuesta
+        if len(x) != len(y):
+            print('Los datos no tienen la misma longitud.')
+            return
+
+        self.x = np.asarray(x, dtype=float)
+        self.y = np.asarray(y, dtype=float)
+        self.resumen_ajuste_sm = None
+
+    def mostrar_estadisticas(self):
+        # Muestra estadísticas de y solamente
+        n = len(self.y)
+        media_y = sum(self.y)/n
+        varianza_y = sum((self.y-media_y)**2/(n-1))
+        min_y = min(self.y)
+        max_y = max(self.y)
+        print(f'Cantidad de datos: {n}.')
+        print(f'Media de y       : {media_y}.')
+        print(f'Varianza muestral de y    : {varianza_y}.')
+        print(f'Desvío std muestral de y  : {varianza_y**0.5}')
+        print(f'Rango de y       : [{min_y},{max_y}]')
+
+    def ajustar_modelo_sm(self):
+        # Estimo modelo de regresión lineal
+        # Genero result, ajustados y resumen (diccionario)
+        self.X = sm.add_constant(self.x,prepend=True)      #Aseguro que b0 sea el primero en params
+        self.modelo_sm = sm.OLS(self.y, self.X)
+        self.result_sm = self.modelo_sm.fit()
+        self.ajustados = np.dot(self.X, self.result_sm.params)
+        # podría usar result_sm.fittedvalues, es lo mismo
+
+        self.resumen_ajuste_sm ={'betas': self.result_sm.params,
+                              'p_valores': self.result_sm.pvalues,
+                              'predichos': self.ajustados,
+                              'r2_ajustado': self.result_sm.rsquared_adj,
+                              'resultado': self.result_sm,
+                              'summary': self.result_sm.summary()}
+
+    def mostrar_ajuste_sm(self):
+      print(self.resumen_ajuste_sm['summary'])
+
+class RegresionLinealSimple(RegresionLineal):
+    def __init__(self, y, x):
+        super().__init__(y, x)
+        if self.x.ndim != 1:
+          print('x debe ser un vector.')
+          return
+
+    def predecir(self, new_x):
+      #new_x es un valor puntual
+        new_X = np.array([1,new_x])
+        self.y_nuevo = np.dot(new_X, self.result_sm.params)
+        print("Respuesta estimada para x_new:", self.y_nuevo)
+        return self.y_nuevo
+
+    def predecir_sm(self, new_x, alfa = 0.05):
+        new_X = np.array([1,new_x])
+        self.prediccion_sm = self.result_sm.get_prediction(new_X, alpha=alfa)
+        self.y_nuevo_sm = self.prediccion_sm.predicted_mean[0]
+        self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)[0]
+        self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)[0]
+
+        self.resumen_prediccion_sm = {'x_nuevo':new_x,
+                              'y_estimado':self.y_nuevo_sm,
+                              'int. conf. y_estimado':self.intervalo_confianza_y_nuevo_sm,
+                              'int. pred. y_estimado':self.intervalo_prediccion_y_nuevo_sm}
+        return self.resumen_prediccion_sm
+
+    def mostrar_prediccion_sm(self):
+        print(self.resumen_prediccion_sm)
+
+    def graficar_recta_ajustada(self, label_x='x', label_y='y'):
+      # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
+      if self.resumen_ajuste_sm is None:
+        print('Debe ajustar el modelo antes de graficar.')
+        return
+
+      y_estimada = self.resumen_ajuste_sm['predichos']
+
+      plt.figure(figsize=(10, 6))
+      plt.scatter(self.x, self.y, label="Datos")
+      plt.plot(self.x, self.y_estimada, label="Recta Estimada", linestyle="--", color="green")
+      plt.xlabel('Predictora x')
+      plt.ylabel('Respuesta y')
+      plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
+      plt.legend()
+      plt.show()
+
+class RegresionLinealMultiple(RegresionLineal):
+    def __init__(self, y, x):
+        super().__init__(y, x)
+        if self.x.ndim != 2:
+          print('x debe ser una matriz.')
+          return
+
+    def predecir_sm(self, new_x, alfa=0.05):
+
+        #new_x debe ser np.array([1,valores])
+
+        self.prediccion_sm = self.result_sm.get_prediction(new_x)
+
+        self.y_nuevo_sm = self.prediccion_sm.predicted_mean
+
+        self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)
+
+        self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)
+
+        return self.y_nuevo_sm, self.intervalo_confianza_y_nuevo_sm, self.intervalo_prediccion_y_nuevo_sm
+
+    def predecir_sm(self, new_x, alfa= 0.05):
+
+        if new_x.ndim == 1:
+            new_x = new_x.reshape(1, -1)
+
+        new_X = sm.add_constant(new_x, prepend=True)
+
+
+        prediccion = self.result_sm.get_prediction(new_X, alpha=alfa)
+
+        self.y_nuevo_sm = prediccion.predicted_mean
+        self.intervalo_confianza_y_nuevo_sm = prediccion.conf_int(alpha=alfa)
+        self.intervalo_prediccion_y_nuevo_sm = prediccion.conf_int(obs=True, alpha=alfa)
+
+        self.resumen_prediccion_sm = {
+            'y_estimado': self.y_nuevo_sm,
+            'int. conf. y_estimado': self.intervalo_confianza_y_nuevo_sm,
+            'int. pred. y_estimado': self.intervalo_prediccion_y_nuevo_sm
+        }
+
+        return self.resumen_prediccion_sm
+
+    def mostrar_prediccion_sm(self):
+        """Muestra el diccionario de resultados de la última predicción de statsmodels."""
+        if self.resumen_prediccion_sm is None:
+            print("No se ha realizado ninguna predicción con statsmodels.")
+            return
+        print("--- Resultados de Predicción ---")
+        df_pred = pd.DataFrame({
+            'Y Predicho': self.resumen_prediccion_sm['y_estimado'],
+            'IC Inferior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 0],
+            'IC Superior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 1],
+            'IP Inferior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 0],
+            'IP Superior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 1]
+        })
+        print(df_pred.to_string())
+
+import random
+# Funciona OK. 02-06-25
 class Separacion_train_test():
   ''' Separa datos en datos_train y datos_test
-      Argumento: datos en array o dataframe.
+      Argumento: datos como dataframe.
 
       Método:
           particion(p_train,seed)
@@ -23,18 +550,24 @@ class Separacion_train_test():
   '''
 
   def __init__(self,datos):
+    if len(datos) == 0:
+      print('No hay datos.')
+      return
     self.datos = datos
 
 
   def particion(self,p_train,seed=10):
+    if p_train < 0 or p_train > 1:
+      print('p_train debe estar entre 0 y 1.')
+      return
     n = self.datos.shape[0]
     n_train = int(n*p_train)
     n_test = n - n_train
 
     random.seed(seed)
-    cuales = random.sample(range(n), n_train)
-    datos_test = datos.drop(cuales)
-    datos_train = datos.iloc[cuales]
+    cuales = self.datos.index[random.sample(range(n), n_train)]
+    datos_test = self.datos.drop(cuales)
+    datos_train = self.datos.iloc[cuales]
     return datos_train, datos_test
 
 # Funciona OK. 11-06-25 09:34
@@ -136,7 +669,7 @@ class RegresionLogistica():
     Evalua el modelo entrenado.
     Dado umbral, crea matriz de confusión, calcula error de clasificación, sensibilidad y especificidad.
     '''
-    if umbral = None:
+    if umbral is None:
       print('No se ha especificado un umbral.')
       return
     elif umbral < 0 or umbral > 1:
@@ -203,15 +736,15 @@ class RegresionLogistica():
       p_values = np.linspace(p_min, p_max, num_puntos)
 
     # Listas para almacenar sensibilidad y especificidad
-    sensibilidad = []
-    especificidad = []
+    sensibilidad = []                              # TPR
+    especificidad = []                             # TNR
     for p in p_values:
         # Calcular matriz de confusión
         confusion_p = self.evaluar_modelo(p)['tabla']
-        a = confusion_p['y_test=1']['y_pred=1']
-        b = confusion_p['y_test=0']['y_pred=1']
-        c = confusion_p['y_test=1']['y_pred=0']
-        d = confusion_p['y_test=0']['y_pred=0']
+        a = confusion_p['y_test=1']['y_pred=1']    # TP
+        b = confusion_p['y_test=0']['y_pred=1']    # FP
+        c = confusion_p['y_test=1']['y_pred=0']    # FP
+        d = confusion_p['y_test=0']['y_pred=0']    # TN
         # Calcular sensibilidad y especificidad
         sensibilidad.append(a/(a+c))
         especificidad.append(d/(b+d))
@@ -222,19 +755,19 @@ class RegresionLogistica():
     sensibilidad_p = sensibilidad[idx_umbral_p]
     especificidad_p = especificidad[idx_umbral_p]
 
-    # AUC
+    # AUC: FPR, TPR
     roc_auc = auc(1-np.array(especificidad), sensibilidad)
 
     # Graficar ROC
     plt.plot(1-np.array(especificidad), sensibilidad)
-    plt.xlabel('1-especificidad')
-    plt.ylabel('sensibilidad')
+    plt.xlabel('1-especificidad (FPR)')
+    plt.ylabel('sensibilidad (TPR)')
     plt.title('Curva ROC')
     plt.grid(True)
     plt.show()
     print('Umbral p:', umbral_p)
-    print('Sensibilidad:', sensibilidad_p)
-    print('Especificidad:', especificidad_p)
+    print('Sensibilidad (TPR):', sensibilidad_p)
+    print('Especificidad (TNR):', especificidad_p)
     print("AUC:", roc_auc)
 
 # Funciona OK. 11-06-2025 10:40
