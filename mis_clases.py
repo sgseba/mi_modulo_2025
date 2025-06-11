@@ -37,7 +37,7 @@ class Separacion_train_test():
     datos_train = datos.iloc[cuales]
     return datos_train, datos_test
 
-# Funciona OK. 11-06-25
+# Funciona OK. 11-06-25 09:34
 import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
@@ -237,7 +237,7 @@ class RegresionLogistica():
     print('Especificidad:', especificidad_p)
     print("AUC:", roc_auc)
 
-# Funciona OK. 09-06-2025 15:30
+# Funciona OK. 11-06-2025 10:40
 from scipy.stats import chi2
 
 class mi_test_chi2:
@@ -265,11 +265,12 @@ class mi_test_chi2:
   '''
 
   def __init__(self, Obs, Est, k = 0, alfa = 0.05):
+    # Chequeo que los vectorres tengan longitudes positivas e iguales, y que Est no tenga valores <= 0 para poder dividir.
+    if len(Obs) != len(Est) or (len(Obs)==0) or (len(Est)==0) or np.any(np.array(Est)<=0)):
+      print("Datos incorrectos.")
+      return
     self.obs = Obs
     self.est = Est
-    if len(Obs) != len(Est) or (len(Obs)==0) or (len(Est)==0):
-      print("Datos incorrectos.")
-      pass
     self.N = len(Obs)
     self.k = k
     self.alfa = alfa
@@ -289,8 +290,8 @@ class mi_test_chi2:
     k = self.k
     alfa = self.alfa                     # alfa: significancia
     gl = N - 1 - k                       # grados de libertad
-    chi2_obs = self._calculo_chi2_()     # estadístico calculado (observado)
-    chi2_teor = chi2.ppf(1 - alfa,gl)    # estadístico tabulado
+    chi2_obs = self._calculo_chi2_()     # estadístico observado
+    chi2_teor = chi2.ppf(1 - alfa,gl)    # estadístico teórico
     p_valor = 1 - chi2.cdf(chi2_obs,gl)  # p-valor
     if p_valor <= alfa:                  # conclusión
       informe = 'Hay evidencia para rechazar H0: el modelo NO es adecuado.'
