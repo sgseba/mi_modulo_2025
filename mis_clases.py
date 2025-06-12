@@ -902,16 +902,83 @@ def comparar_medias_t(resultado_mi_anova, grupo_A_label, grupo_B_label, alfa=0.0
     print(f'La estimación de la diferencia de la diferencia de medias entre los grupos {grupo_A_label} y {grupo_B_label} través de un intervalo del {100*(1-alfa)}% de confianza es:',lim_inf,lim_sup)
     if np.sign(lim_inf) != np.sign(lim_sup):
       print(f'Como el intervalo incluye el cero, no hay evidencia significativa de que el agrupamiento difiera al nivel del {100*alfa}%. Esto coincide con el resultado no significativo del ANOVA (p_valor = {p_valor_lm} >{alfa}).')
-      else:
-        print(f'Como el intervalo NO incluye el cero, hay evidencia significativa de que el los grupos difieren al nivel del {100*alfa}%. Esto coincide con el resultado significativo del ANOVA (p_valor = {p_valor_lm} <={alfa}).')
+    else:
+      print(f'Como el intervalo NO incluye el cero, hay evidencia significativa de que el los grupos difieren al nivel del {100*alfa}%. Esto coincide con el resultado significativo del ANOVA (p_valor = {p_valor_lm} <={alfa}).')
 
-      print(f"-- Comparación de Medias: '{grupo_A_label}' vs '{grupo_B_label}' ---")
+    print(f"-- Comparación de Medias: '{grupo_A_label}' vs '{grupo_B_label}' ---")
     print(f"Media '{grupo_A_label}': {media_A:.4f} (n={n_A})")
     print(f"Media '{grupo_B_label}': {media_B:.4f} (n={n_B})")
     print(f"Diferencia de Medias: {diferencia_medias:.4f}")
     print(f"t_observado: {t_observado:.4f}")
     print(f"t_critico: {t_critico:.4f}")
     print(f"Grados de libertad: {df_t}")
+    print(f"P-valor: {p_valor_t:.4f}")
+
+
+
+    if p_valor_t<= alfa:
+        print(f"**CONCLUSIÓN:** Con α={alfa}, hay evidencia para **RECHAZAR H0**. "
+              f"La diferencia entre las medias de '{grupo_A_label}' y '{grupo_B_label}' es estadísticamente significativa.")
+    else:
+        print(f"**CONCLUSIÓN:** Con α={alfa}, no hay suficiente evidencia para **RECHAZAR H0**. "
+              f"La diferencia entre las medias de '{grupo_A_label}' y '{grupo_B_label}' NO es estadísticamente significativa.")
+
+import numpy as np
+import pandas as pd
+from scipy.stats import t
+
+# FUNCIONA OK. 11-06-25
+def comparar_medias_t(resultado_mi_anova, grupo_A_label, grupo_B_label, alfa=0.05):
+    """
+    Realiza un t-test de muestras independientes para comparar las medias
+    de dos grupos específicos de un factor, asumiendo varianzas iguales.
+    Solo debería realizarse si el ANOVA general fue significativo.
+
+    - Requiere que se haya instanciado mi_anova_lm con (y,x).
+    """
+    datos_y = resultado_mi_anova.y
+    datos_x = resultado_mi_anova.x
+
+    y_A = datos_y[datos_x == grupo_A_label]
+    y_B = datos_y[datos_x == grupo_B_label]
+
+    if len(y_A) == 0 or len(y_B) == 0:
+        print('Datos incorrectos.')
+        return
+
+    n_A = len(y_A)
+    n_B = len(y_B)
+    media_A = np.mean(y_A)
+    media_B = np.mean(y_B)
+    diferencia_medias = media_A - media_B
+
+    gl_M = resultado_mi_anova.gl_M
+    Sp2 = resultado_mi_anova.varianza_general_agrupada  # es la MSE = RSS_M / gl_M
+    SE_diferencia = np.sqrt(Sp2*(1/n_A+1/n_B))   # error std de la diferencia
+    t_critico = t.ppf(1 - alfa/2,gl_M)
+    margen_error = t_critico * SE_diferencia
+    lim_inf = diferencia_medias - margen_error
+    lim_sup = diferencia_medias + margen_error
+    gl_t = n_A+n_B-2
+    t_observado = diferencia_medias / SE_diferencia
+    p_valor_t = 2*t.cdf(-abs(t_observado), df=gl_t)
+    print('El intervalo de confianza es:',lim_inf,lim_sup)
+
+
+    # Informe
+    print(f'La estimación de la diferencia de la diferencia de medias entre los grupos {grupo_A_label} y {grupo_B_label} través de un intervalo del {100*(1-alfa)}% de confianza es:',lim_inf,lim_sup)
+    if np.sign(lim_inf) != np.sign(lim_sup):
+      print(f'Como el intervalo incluye el cero, no hay evidencia significativa de que el agrupamiento difiera al nivel del {100*alfa}%. Esto coincide con el resultado no significativo del ANOVA (p_valor = {resultado_mi_anova.p_valor} >{alfa}).')
+    else:
+      print(f'Como el intervalo NO incluye el cero, hay evidencia significativa de que el los grupos difieren al nivel del {100*alfa}%. Esto coincide con el resultado significativo del ANOVA (p_valor = {resultado_mi_anova.p_valor} <={alfa}).')
+
+    print(f"-- Comparación de Medias: '{grupo_A_label}' vs '{grupo_B_label}' ---")
+    print(f"Media '{grupo_A_label}': {media_A:.4f} (n={n_A})")
+    print(f"Media '{grupo_B_label}': {media_B:.4f} (n={n_B})")
+    print(f"Diferencia de Medias: {diferencia_medias:.4f}")
+    print(f"t_observado: {t_observado:.4f}")
+    print(f"t_critico: {t_critico:.4f}")
+    print(f"Grados de libertad: {gl_t}")
     print(f"P-valor: {p_valor_t:.4f}")
 
 
