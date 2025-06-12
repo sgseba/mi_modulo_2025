@@ -19,13 +19,13 @@ class GeneradoraDeDatos:
 
   def genera_datos_dist_norm(self, media=0, desvio=1):
     # Usa n. Puede recibir media, desvío. Devuelve array de datos con distrib N(media,desvio).
-    return np.random.normal(loc=media,scale=desvio, self.n)
+    return np.random.normal(self.n,loc=media,scale=desvio)
 
   def genera_datos_BS(self):
     # Usa n, devuelve array de datos_BS ~ N(0,1), Bart Simpson
-    y = 0.5 + np.random.normal(0,1,self.n)
+    y = 0.5 + np.random.normal(self.n,0,1)
     for j in range(5):
-      y += 0.1 * np.random.normal(0.5*j - 1, 0.1,self.n)
+      y += 0.1 * np.random.normal( self.n, 0.5*j - 1, 0.1)
     return y
 
   def densidad_normal(self, x, media=0, desvio=1):
@@ -161,7 +161,7 @@ class RegresionLinealSimple():
       self.datos_x = np.asarray(datos_x, dtype=float)
       self.datos_y = np.asarray(datos_y, dtype=float)
       self.datos_x_label = label_x
-      self.datos_y_label =
+      self.datos_y_label = label_y
       self.resumen = {}
 
   def calcular_regresion(self):
@@ -384,161 +384,161 @@ import numpy as np
 import pandas as pd
 
 class RegresionLineal:
-  ''' Implementa Regresion Lineal Simple y Múltiple como clases hijas de Regresion Linal.
+    ''' Implementa Regresion Lineal Simple y Múltiple como clases hijas de Regresion Linal.
 
-  '''
+    '''
     def __init__(self, y, x):
-        # x = variables predictora/s
-        # y = variable respuesta
-        if len(x) != len(y):
-            print('Los datos no tienen la misma longitud.')
-            return
+      # x = variables predictora/s
+      # y = variable respuesta
+      if len(x) != len(y):
+          print('Los datos no tienen la misma longitud.')
+          return
 
-        self.x = np.asarray(x, dtype=float)
-        self.y = np.asarray(y, dtype=float)
-        self.resumen_ajuste_sm = None
+      self.x = np.asarray(x, dtype=float)
+      self.y = np.asarray(y, dtype=float)
+      self.resumen_ajuste_sm = None
 
     def mostrar_estadisticas(self):
-        # Muestra estadísticas de y solamente
-        n = len(self.y)
-        media_y = sum(self.y)/n
-        varianza_y = sum((self.y-media_y)**2/(n-1))
-        min_y = min(self.y)
-        max_y = max(self.y)
-        print(f'Cantidad de datos: {n}.')
-        print(f'Media de y       : {media_y}.')
-        print(f'Varianza muestral de y    : {varianza_y}.')
-        print(f'Desvío std muestral de y  : {varianza_y**0.5}')
-        print(f'Rango de y       : [{min_y},{max_y}]')
+      # Muestra estadísticas de y solamente
+      n = len(self.y)
+      media_y = sum(self.y)/n
+      varianza_y = sum((self.y-media_y)**2/(n-1))
+      min_y = min(self.y)
+      max_y = max(self.y)
+      print(f'Cantidad de datos: {n}.')
+      print(f'Media de y       : {media_y}.')
+      print(f'Varianza muestral de y    : {varianza_y}.')
+      print(f'Desvío std muestral de y  : {varianza_y**0.5}')
+      print(f'Rango de y       : [{min_y},{max_y}]')
 
     def ajustar_modelo_sm(self):
-        # Estimo modelo de regresión lineal
-        # Genero result, ajustados y resumen (diccionario)
-        self.X = sm.add_constant(self.x,prepend=True)      #Aseguro que b0 sea el primero en params
-        self.modelo_sm = sm.OLS(self.y, self.X)
-        self.result_sm = self.modelo_sm.fit()
-        self.ajustados = np.dot(self.X, self.result_sm.params)
-        # podría usar result_sm.fittedvalues, es lo mismo
+      # Estimo modelo de regresión lineal
+      # Genero result, ajustados y resumen (diccionario)
+      self.X = sm.add_constant(self.x,prepend=True)      #Aseguro que b0 sea el primero en params
+      self.modelo_sm = sm.OLS(self.y, self.X)
+      self.result_sm = self.modelo_sm.fit()
+      self.ajustados = np.dot(self.X, self.result_sm.params)
+      # podría usar result_sm.fittedvalues, es lo mismo
 
-        self.resumen_ajuste_sm ={'betas': self.result_sm.params,
-                              'p_valores': self.result_sm.pvalues,
-                              'predichos': self.ajustados,
-                              'r2_ajustado': self.result_sm.rsquared_adj,
-                              'resultado': self.result_sm,
-                              'summary': self.result_sm.summary()}
+      self.resumen_ajuste_sm ={'betas': self.result_sm.params,
+                            'p_valores': self.result_sm.pvalues,
+                            'predichos': self.ajustados,
+                            'r2_ajustado': self.result_sm.rsquared_adj,
+                            'resultado': self.result_sm,
+                            'summary': self.result_sm.summary()}
 
     def mostrar_ajuste_sm(self):
       print(self.resumen_ajuste_sm['summary'])
 
 class RegresionLinealSimple(RegresionLineal):
     def __init__(self, y, x):
-        super().__init__(y, x)
-        if self.x.ndim != 1:
-          print('x debe ser un vector.')
-          return
-
-    def predecir(self, new_x):
-      #new_x es un valor puntual
-        new_X = np.array([1,new_x])
-        self.y_nuevo = np.dot(new_X, self.result_sm.params)
-        print("Respuesta estimada para x_new:", self.y_nuevo)
-        return self.y_nuevo
-
-    def predecir_sm(self, new_x, alfa = 0.05):
-        new_X = np.array([1,new_x])
-        self.prediccion_sm = self.result_sm.get_prediction(new_X, alpha=alfa)
-        self.y_nuevo_sm = self.prediccion_sm.predicted_mean[0]
-        self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)[0]
-        self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)[0]
-
-        self.resumen_prediccion_sm = {'x_nuevo':new_x,
-                              'y_estimado':self.y_nuevo_sm,
-                              'int. conf. y_estimado':self.intervalo_confianza_y_nuevo_sm,
-                              'int. pred. y_estimado':self.intervalo_prediccion_y_nuevo_sm}
-        return self.resumen_prediccion_sm
-
-    def mostrar_prediccion_sm(self):
-        print(self.resumen_prediccion_sm)
-
-    def graficar_recta_ajustada(self, label_x='x', label_y='y'):
-      # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
-      if self.resumen_ajuste_sm is None:
-        print('Debe ajustar el modelo antes de graficar.')
+      super().__init__(y, x)
+      if self.x.ndim != 1:
+        print('x debe ser un vector.')
         return
 
-      y_estimada = self.resumen_ajuste_sm['predichos']
+   def predecir(self, new_x):
+    #new_x es un valor puntual
+      new_X = np.array([1,new_x])
+      self.y_nuevo = np.dot(new_X, self.result_sm.params)
+      print("Respuesta estimada para x_new:", self.y_nuevo)
+      return self.y_nuevo
 
-      plt.figure(figsize=(10, 6))
-      plt.scatter(self.x, self.y, label="Datos")
-      plt.plot(self.x, self.y_estimada, label="Recta Estimada", linestyle="--", color="green")
-      plt.xlabel('Predictora x')
-      plt.ylabel('Respuesta y')
-      plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
-      plt.legend()
-      plt.show()
+    def predecir_sm(self, new_x, alfa = 0.05):
+      new_X = np.array([1,new_x])
+      self.prediccion_sm = self.result_sm.get_prediction(new_X, alpha=alfa)
+      self.y_nuevo_sm = self.prediccion_sm.predicted_mean[0]
+      self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)[0]
+      self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)[0]
+
+      self.resumen_prediccion_sm = {'x_nuevo':new_x,
+                            'y_estimado':self.y_nuevo_sm,
+                            'int. conf. y_estimado':self.intervalo_confianza_y_nuevo_sm,
+                            'int. pred. y_estimado':self.intervalo_prediccion_y_nuevo_sm}
+      return self.resumen_prediccion_sm
+
+    def mostrar_prediccion_sm(self):
+      print(self.resumen_prediccion_sm)
+
+    def graficar_recta_ajustada(self, label_x='x', label_y='y'):
+    # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
+    if self.resumen_ajuste_sm is None:
+      print('Debe ajustar el modelo antes de graficar.')
+      return
+
+    y_estimada = self.resumen_ajuste_sm['predichos']
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(self.x, self.y, label="Datos")
+    plt.plot(self.x, self.y_estimada, label="Recta Estimada", linestyle="--", color="green")
+    plt.xlabel('Predictora x')
+    plt.ylabel('Respuesta y')
+    plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
+    plt.legend()
+    plt.show()
 
 class RegresionLinealMultiple(RegresionLineal):
     def __init__(self, y, x):
-        super().__init__(y, x)
-        if self.x.ndim != 2:
-          print('x debe ser una matriz.')
-          return
+      super().__init__(y, x)
+      if self.x.ndim != 2:
+        print('x debe ser una matriz.')
+        return
 
     def predecir_sm(self, new_x, alfa=0.05):
 
-        #new_x debe ser np.array([1,valores])
+      #new_x debe ser np.array([1,valores])
 
-        self.prediccion_sm = self.result_sm.get_prediction(new_x)
+      self.prediccion_sm = self.result_sm.get_prediction(new_x)
 
-        self.y_nuevo_sm = self.prediccion_sm.predicted_mean
+      self.y_nuevo_sm = self.prediccion_sm.predicted_mean
 
-        self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)
+      self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)
 
-        self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)
+      self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)
 
-        return self.y_nuevo_sm, self.intervalo_confianza_y_nuevo_sm, self.intervalo_prediccion_y_nuevo_sm
+      return self.y_nuevo_sm, self.intervalo_confianza_y_nuevo_sm, self.intervalo_prediccion_y_nuevo_sm
 
     def predecir_sm(self, new_x, alfa= 0.05):
 
-        if new_x.ndim == 1:
-            new_x = new_x.reshape(1, -1)
+      if new_x.ndim == 1:
+          new_x = new_x.reshape(1, -1)
 
-        new_X = sm.add_constant(new_x, prepend=True)
+      new_X = sm.add_constant(new_x, prepend=True)
 
 
-        prediccion = self.result_sm.get_prediction(new_X, alpha=alfa)
+      prediccion = self.result_sm.get_prediction(new_X, alpha=alfa)
 
-        self.y_nuevo_sm = prediccion.predicted_mean
-        self.intervalo_confianza_y_nuevo_sm = prediccion.conf_int(alpha=alfa)
-        self.intervalo_prediccion_y_nuevo_sm = prediccion.conf_int(obs=True, alpha=alfa)
+      self.y_nuevo_sm = prediccion.predicted_mean
+      self.intervalo_confianza_y_nuevo_sm = prediccion.conf_int(alpha=alfa)
+      self.intervalo_prediccion_y_nuevo_sm = prediccion.conf_int(obs=True, alpha=alfa)
 
-        self.resumen_prediccion_sm = {
-            'y_estimado': self.y_nuevo_sm,
-            'int. conf. y_estimado': self.intervalo_confianza_y_nuevo_sm,
-            'int. pred. y_estimado': self.intervalo_prediccion_y_nuevo_sm
-        }
+      self.resumen_prediccion_sm = {
+          'y_estimado': self.y_nuevo_sm,
+          'int. conf. y_estimado': self.intervalo_confianza_y_nuevo_sm,
+          'int. pred. y_estimado': self.intervalo_prediccion_y_nuevo_sm
+      }
 
-        return self.resumen_prediccion_sm
+      return self.resumen_prediccion_sm
 
     def mostrar_prediccion_sm(self):
-        """Muestra el diccionario de resultados de la última predicción de statsmodels."""
-        if self.resumen_prediccion_sm is None:
-            print("No se ha realizado ninguna predicción con statsmodels.")
-            return
-        print("--- Resultados de Predicción ---")
-        df_pred = pd.DataFrame({
-            'Y Predicho': self.resumen_prediccion_sm['y_estimado'],
-            'IC Inferior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 0],
-            'IC Superior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 1],
-            'IP Inferior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 0],
-            'IP Superior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 1]
-        })
-        print(df_pred.to_string())
+      """Muestra el diccionario de resultados de la última predicción de statsmodels."""
+      if self.resumen_prediccion_sm is None:
+          print("No se ha realizado ninguna predicción con statsmodels.")
+          return
+      print("--- Resultados de Predicción ---")
+      df_pred = pd.DataFrame({
+          'Y Predicho': self.resumen_prediccion_sm['y_estimado'],
+          'IC Inferior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 0],
+          'IC Superior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 1],
+          'IP Inferior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 0],
+          'IP Superior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 1]
+      })
+      print(df_pred.to_string())
 
 import random
 # Funciona OK. 02-06-25
 class Separacion_train_test():
-  ''' Separa datos en datos_train y datos_test
+    ''' Separa datos en datos_train y datos_test
       Argumento: datos como dataframe.
 
       Método:
@@ -547,28 +547,28 @@ class Separacion_train_test():
                 seed: valor de la semilla para la elección random: defecto=10
       Ejemplo de uso:
           datos_train,datos_test = Separacion_train_test(datos).particion(0.8,10)
-  '''
+    '''
 
-  def __init__(self,datos):
-    if len(datos) == 0:
-      print('No hay datos.')
-      return
-    self.datos = datos
+    def __init__(self,datos):
+      if len(datos) == 0:
+        print('No hay datos.')
+        return
+      self.datos = datos
 
 
-  def particion(self,p_train,seed=10):
-    if p_train < 0 or p_train > 1:
-      print('p_train debe estar entre 0 y 1.')
-      return
-    n = self.datos.shape[0]
-    n_train = int(n*p_train)
-    n_test = n - n_train
+    def particion(self,p_train,seed=10):
+      if p_train < 0 or p_train > 1:
+        print('p_train debe estar entre 0 y 1.')
+        return
+      n = self.datos.shape[0]
+      n_train = int(n*p_train)
+      n_test = n - n_train
 
-    random.seed(seed)
-    cuales = self.datos.index[random.sample(range(n), n_train)]
-    datos_test = self.datos.drop(cuales)
-    datos_train = self.datos.iloc[cuales]
-    return datos_train, datos_test
+      random.seed(seed)
+      cuales = self.datos.index[random.sample(range(n), n_train)]
+      datos_test = self.datos.drop(cuales)
+      datos_train = self.datos.iloc[cuales]
+      return datos_train, datos_test
 
 # Funciona OK. 11-06-25 09:34
 import numpy as np
@@ -799,7 +799,7 @@ class mi_test_chi2:
 
   def __init__(self, Obs, Est, k = 0, alfa = 0.05):
     # Chequeo que los vectorres tengan longitudes positivas e iguales, y que Est no tenga valores <= 0 para poder dividir.
-    if len(Obs) != len(Est) or (len(Obs)==0) or (len(Est)==0) or np.any(np.array(Est)<=0)):
+    if len(Obs) != len(Est) or (len(Obs)==0) or (len(Est)==0) or np.any(np.array(Est)<=0):
       print("Datos incorrectos.")
       return
     self.obs = Obs
