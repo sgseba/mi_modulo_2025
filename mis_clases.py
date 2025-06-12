@@ -765,7 +765,7 @@ class RegresionLogistica():
     plt.title('Curva ROC')
     plt.grid(True)
     plt.show()
-    print('Umbral p:', umbral_p)
+    print('Umbral p (índice de Youden):', umbral_p)
     print('Sensibilidad (TPR):', sensibilidad_p)
     print('Especificidad (TNR):', especificidad_p)
     print("AUC:", roc_auc)
