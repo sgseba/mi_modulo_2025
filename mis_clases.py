@@ -570,7 +570,7 @@ class Separacion_train_test():
       datos_train = self.datos.iloc[cuales]
       return datos_train, datos_test
 
-# Funciona OK. 11-06-25 09:34
+# Funciona OK. 11-06-25. Achiqué código en tabla de confusión.
 import numpy as np
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
@@ -578,7 +578,7 @@ from sklearn.metrics import auc
 import pandas as pd
 import random
 
-
+#16-06-25 16:25
 class RegresionLogistica():
   ''' Clase para regresión logística.
 
@@ -661,7 +661,9 @@ class RegresionLogistica():
       self.datos_y_test = datos_y_test
       self.datos_x_test = datos_x_test
       X_test = sm.add_constant(self.datos_x_test)
+      self.resultado_test = self.calcular_logit(self.datos_y_test, self.datos_x_test)
       self.predicciones = self.resultado_train['resultado'].predict(X_test)
+      return self.resultado_test
 
 
   def evaluar_modelo(self, umbral):
@@ -680,16 +682,16 @@ class RegresionLogistica():
       print('No se ha testeado el modelo.')
       return
     else:
-      y_pred = (self.predicciones >= umbral).astype(int) # vector binario: 1 si es mayor a umbral
+      y_pred = (self.predicciones >= umbral).astype(int) # vector binario: 1 si es >= a umbral
 
       #Matriz de confusión para umbral
       a = sum((y_pred == 1) & (self.datos_y_test == 1))
-      b = sum((y_pred == 0) & (self.datos_y_test == 1))
-      c = sum((y_pred == 1) & (self.datos_y_test == 0))
+      b = sum((y_pred == 1) & (self.datos_y_test == 0))
+      c = sum((y_pred == 0) & (self.datos_y_test == 1))
       d = sum((y_pred == 0) & (self.datos_y_test == 0))
       tabla =  pd.DataFrame({
-          'y_test=1': [a, b],
-          'y_test=0': [c, d],
+          'y_test=1': [a, c],
+          'y_test=0': [b, d],
 
       }, index=['y_pred=1', 'y_pred=0'])
 
@@ -731,9 +733,9 @@ class RegresionLogistica():
     if self.predicciones is None:
       print('No se ha testeado el modelo.')
       return
-    else:
+
     # Generar valores de p
-      p_values = np.linspace(p_min, p_max, num_puntos)
+    p_values = np.linspace(p_min, p_max, num_puntos)
 
     # Listas para almacenar sensibilidad y especificidad
     sensibilidad = []                              # TPR
@@ -741,10 +743,10 @@ class RegresionLogistica():
     for p in p_values:
         # Calcular matriz de confusión
         confusion_p = self.evaluar_modelo(p)['tabla']
-        a = confusion_p['y_test=1']['y_pred=1']    # TP
-        b = confusion_p['y_test=0']['y_pred=1']    # FP
-        c = confusion_p['y_test=1']['y_pred=0']    # FP
-        d = confusion_p['y_test=0']['y_pred=0']    # TN
+        a = confusion_p.loc['y_pred=1','y_test=1']    # TP
+        b = confusion_p.loc['y_pred=1','y_test=0']    # FP
+        c = confusion_p.loc['y_pred=0','y_test=1']    # FN
+        d = confusion_p.loc['y_pred=0','y_test=0']    # TN
         # Calcular sensibilidad y especificidad
         sensibilidad.append(a/(a+c))
         especificidad.append(d/(b+d))
@@ -860,72 +862,6 @@ class mi_test_chi2:
 import numpy as np
 import pandas as pd
 from scipy.stats import t
-# 11-06-25
-def comparar_medias_t(resultado_mi_anova, grupo_A_label, grupo_B_label, alfa=0.05):
-    """
-    Realiza un t-test de muestras independientes para comparar las medias
-    de dos grupos específicos de un factor, asumiendo varianzas iguales.
-    Solo debería realizarse si el ANOVA general fue significativo.
-
-    - Requiere que se haya instanciado mi_anova_lm con (y,x).
-    """
-    datos_y = resultado_mi_anova.y
-    datos_x = resultado_mi_anova.x
-
-    y_A = datos_y[datos_x == grupo_A_label]
-    y_B = datos_y[datos_x == grupo_B_label]
-
-    if len(y_A) == 0 or len(y_B) == 0:
-        print('Datos incorrectos.')
-        return
-
-    n_A = len(y_A)
-    n_B = len(y_B)
-    media_A = np.mean(y_A)
-    media_B = np.mean(y_B)
-    diferencia_medias = media_A - media_B
-
-    gl_M = resultado_mi_anova.df_resid[1]
-    Sp2 = resultado_mi_anova.varianza_general_agrupada  # es la MSE = RSS_M / gl_M
-    SE_diferencia = np.sqrt(Sp2*(1/n_A+1/n_B))   # error std de la diferencia
-    t_critico = t.ppf(1 - alfa/2,gl_M)
-    margen_error = t_critico * SE_diferencia
-    lim_inf = diferencia_medias - margen_error
-    lim_sup = diferencia_medias + margen_error
-    gl_t = n_A+n_B-2
-    t_observado = diferencia_medias / SE_diferencia
-    p_valor_t = 2*t.cdf(-abs(t_observado), df=gl_t)
-    print('El intervalo de confianza es:',lim_inf,lim_sup)
-
-
-    # Informe
-    print(f'La estimación de la diferencia de la diferencia de medias entre los grupos {grupo_A_label} y {grupo_B_label} través de un intervalo del {100*(1-alfa)}% de confianza es:',lim_inf,lim_sup)
-    if np.sign(lim_inf) != np.sign(lim_sup):
-      print(f'Como el intervalo incluye el cero, no hay evidencia significativa de que el agrupamiento difiera al nivel del {100*alfa}%. Esto coincide con el resultado no significativo del ANOVA (p_valor = {p_valor_lm} >{alfa}).')
-    else:
-      print(f'Como el intervalo NO incluye el cero, hay evidencia significativa de que el los grupos difieren al nivel del {100*alfa}%. Esto coincide con el resultado significativo del ANOVA (p_valor = {p_valor_lm} <={alfa}).')
-
-    print(f"-- Comparación de Medias: '{grupo_A_label}' vs '{grupo_B_label}' ---")
-    print(f"Media '{grupo_A_label}': {media_A:.4f} (n={n_A})")
-    print(f"Media '{grupo_B_label}': {media_B:.4f} (n={n_B})")
-    print(f"Diferencia de Medias: {diferencia_medias:.4f}")
-    print(f"t_observado: {t_observado:.4f}")
-    print(f"t_critico: {t_critico:.4f}")
-    print(f"Grados de libertad: {df_t}")
-    print(f"P-valor: {p_valor_t:.4f}")
-
-
-
-    if p_valor_t<= alfa:
-        print(f"**CONCLUSIÓN:** Con α={alfa}, hay evidencia para **RECHAZAR H0**. "
-              f"La diferencia entre las medias de '{grupo_A_label}' y '{grupo_B_label}' es estadísticamente significativa.")
-    else:
-        print(f"**CONCLUSIÓN:** Con α={alfa}, no hay suficiente evidencia para **RECHAZAR H0**. "
-              f"La diferencia entre las medias de '{grupo_A_label}' y '{grupo_B_label}' NO es estadísticamente significativa.")
-
-import numpy as np
-import pandas as pd
-from scipy.stats import t
 
 # FUNCIONA OK. 11-06-25
 def comparar_medias_t(resultado_mi_anova, grupo_A_label, grupo_B_label, alfa=0.05):
@@ -989,3 +925,226 @@ def comparar_medias_t(resultado_mi_anova, grupo_A_label, grupo_B_label, alfa=0.0
     else:
         print(f"**CONCLUSIÓN:** Con α={alfa}, no hay suficiente evidencia para **RECHAZAR H0**. "
               f"La diferencia entre las medias de '{grupo_A_label}' y '{grupo_B_label}' NO es estadísticamente significativa.")
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+# 16-06-25
+def grafico_factor(data):
+  ''' Grafica boxplot de la respuesta vs niveles del factor.
+    PREVIO A ANOVA.
+    - Recibe: DATAFRAME 2 columnas (respuesta y,predictora x)
+    - Devuelve: gráfico boxplot.
+    - Ejemplo de uso:
+      datos= pd.read_csv(camino+'dengue.csv', sep=';')
+      dengue = pd.DataFrame(datos)
+      grafico_factor(dengue)
+  '''
+  plt.figure(figsize=(8, 6))
+  respuesta_label = data.columns[0]
+  predictora_label = data.columns[1]
+  sns.boxplot(data=data, x=predictora_label, y=respuesta_label);
+  plt.ylabel(respuesta_label)
+  plt.title(f'Distribución de {respuesta_label} por {predictora_label}')
+  plt.show()
+
+import statsmodels.api as sm
+import numpy as np
+from statsmodels.stats.anova import anova_lm
+from scipy.stats import f,t,norm,shapiro
+import seaborn as sns
+from statsmodels.stats.diagnostic import het_breuschpagan, het_white
+import matplotlib.pyplot as plt
+import pandas as pd
+
+#16-06-25 16:25
+class mi_anova_lm:
+  ''' Clase para realizar ANOVA de un factor: incidencia de factores de una variable predictora en la variabilidad de una variable dependiente.
+
+  - Modelo lineal de anova: Y_ij = mu_i + e_ij, e_ij \sim N(0,s2), i niveles, j individuos en cada nivel.
+    - Hipótesis:
+      H0: mu_i = mu_j (las medias son iguales)
+      H1: alguna es diferente
+  - Al convertirlo en regresión múltiple con dummies en los niveles:
+      Modelo: Y_i = b_0 + b_1 x_i1 + b_2 x_i2 +.. + e_i, e_i \sim N(0,s2), i individuos, b_i = coeficientes de cada nivel, x_i = 1 si pertenece al nivel i, 0 si no.
+      Hipótesis:
+      H0: b_0 = b_0+b_1 = ... = b_0+b_n = 0
+        equivale H0: b_i = 0, i=1,...,n
+      H1: alguna es diferente
+    - Bajo H0: modelo: Y_i = b_0 + e_i, e_i \sim N(0,s2)
+    - Bajo H1: modelo: Y_i = b_0 + b_i + e_i, e_i \sim N(0,s2), i=1,n
+
+  - Implementa test F para igualdad de medias de los niveles del factor.
+  - Recibe: 2 DATAFRAME: y (respuesta) y x (predictora, con niveles).
+
+
+  La idea es que un modelo suponga que el factor influye: va a tener todos los niveles del factor como variables; el otro modelo, nulo o reducido, va a suponer que el factor no influye, por lo que los datos solo tienen variabilidad natural y todos los bi=0, salvo b0 que es la media global.
+
+  - Supuestos:
+    -datos independientes (sin relación entre sí, se controla en el diseño del experimento,
+    -errores normalmente distribuidos (Shapiro si n<50, else qq) y
+    -homocedasticidad en el modelo de regresión (errores tienen varianza constante, con Breusch-Pagan; es mejor usar Barlett para grupos categóricos).
+
+  - Compara:
+    - modelo_M con todos los niveles del factor pasados a dummies
+    - modelo_m solo con 1's (esto es b0, estimador de la media general, para todos los datos)
+
+    - Recibe: 2 DATAFRAME: y (respuesta) y x (predictora, con niveles).
+    - Métodos:
+      - _ajustar_modelos():
+          Hace dummies de x y crea el modelo de regresión múltiple (OLS) completo (modelo_M) y el modelo nulo (modelo_m).
+      - _creo_tabla_anova(): usa modelo_m y modelo_M para crear la tabla de anova con anova_lm().
+      - informe_anova(): usa tabla_anova para crear el informe.
+
+      - OBS:
+        -si n grande, no se hace análisis de residuos xq t-> N
+        -dummies: irrelevante cual es referencia.
+
+      - Ejemplo de uso:
+        datos= pd.read_csv(camino+'dengue.csv', sep=';')
+        dengue = pd.DataFrame(datos)
+        y = dengue['plaquetas']
+        x = dengue['tipo_dengue']
+        anova = mi_anova_lm(y,x)
+        anova.informe_anova(0.05)
+  '''
+  def __init__(self, y,x):
+    self.y = np.asarray(y)
+    self.x = np.asarray(x)
+    if len(y) != len(x):
+      print("Datos incorrectos.")
+      return
+    self.modelo_M = None
+    self.modelo_m = None
+    self.resultado_M = None
+    self.resultado_m = None
+    self.gl_m = None
+    self.gl_M = None
+    self.F_critico = None
+    self.p_valor = None
+    self.F_obs = None
+    self.varianza_general_agrupada = None
+    self.varianza_sin_agrupacion = None
+    self.informe = None
+    self.tabla_anova = None
+
+  def _ajustar_modelos(self):
+    x_d=pd.get_dummies(self.x,drop_first=True).astype(int)
+
+    #Hago regresión lineal con las predictoras: modelo_M
+    X_d = sm.add_constant(x_d)
+    self.modelo_M = sm.OLS(self.y, X_d)
+    self.resultado_M= self.modelo_M.fit()
+
+    # Hago regresión para el modelo sin el factor: modelo_m
+    n=len(self.y)
+    X_1 =  np.ones((n, 1))
+    self.modelo_m= sm.OLS(self.y, X_1)
+    self.resultado_m= self.modelo_m.fit()
+
+  def _creo_tabla_anova(self):
+    if self.resultado_m is None or self.resultado_M is None:
+      self._ajustar_modelos()
+
+    self.tabla_anova = anova_lm(self.resultado_m,self.resultado_M)
+    return self.tabla_anova
+
+  def informe_anova(self, alfa=0.05):
+    if self.resultado_m is None or self.resultado_M is None:
+      self._ajustar_modelos()
+      self.tabla_anova = self._creo_tabla_anova()
+
+    print(self.tabla_anova)
+    RSS_M = self.tabla_anova.ssr[1]
+    self.gl_M = self.tabla_anova.df_resid[1]
+    RSS_m = self.tabla_anova.ssr[0]
+    self.gl_m = self.tabla_anova.df_resid[0]
+
+    self.varianza_general_agrupada = RSS_M /self.gl_M             # es la Sp2
+    self.varianza_sin_agrupacion = RSS_m / self.gl_m
+    print('Estimación de la varianza general por efecto de la agrupación, suponiendo que los grupos tienen varianzas iguales (Sp2):',self.varianza_general_agrupada)
+    print('El modelo_m tiene toda la variabilidad (no hay explicación por los grupos).')
+    print('El modelo_M tiene menos variabilidad (hay explicación debida a la agrupación (menos gl)).')
+    print('Varianza general sin grupos:', self.varianza_sin_agrupacion)
+    self.F_obs = self.tabla_anova.F[1]
+    print('El estadístico F_obs es:',self.F_obs)
+    self.p_valor = self.tabla_anova['Pr(>F)'][1]
+    print('El p-valor es:',self.p_valor)
+
+    self.F_critico = f.ppf(1-alfa,self.gl_M,self.gl_m)
+    print(f'El F_critico con αlfa={alfa}, es {self.F_critico}')
+
+    print('--------------')
+    print('COMCLUSION ANOVA')
+    print('(asumiendo que se verifican todos los supuestos: independencia, normalidad de errores y varianzas constantes de errores.)')
+    print('--------------')
+    if self.p_valor <= alfa:
+        self.informe = (f'Dado que el p-valor ({self.p_valor:.5f}) es menor o igual a α ({alfa}), '
+                        'hay evidencia para RECHAZAR la hipótesis nula (H0). '
+                        'Esto sugiere que el factor tiene un efecto significativo sobre la variable dependiente.')
+    else:
+        self.informe = (f'Dado que el p-valor ({self.p_valor:.5f}) es mayor que α ({alfa}), '
+                        'NO hay suficiente evidencia para rechazar la hipótesis nula (H0). '
+                        'Esto sugiere que el factor NO tiene un efecto significativo sobre la variable dependiente.')
+    print(self.informe)
+
+  def miqqplot(data):
+    #Crea qqplot manualmente.
+
+    media = np.mean(data)
+    desviacion_estandar = np.std(data)
+
+    data_s = (data- media) / desviacion_estandar
+    cuantiles_muestrales=np.sort(data_s)
+    n=len(data)
+    pp=np.arange(1, (n+1))/(n+1)
+    cuantiles_teoricos = norm.ppf(pp)
+
+    plt.scatter(cuantiles_teoricos, cuantiles_muestrales, color='blue', marker='o')
+    plt.xlabel('Cuantiles teóricos')
+    plt.ylabel('Cuantiles muestrales')
+    plt.plot(cuantiles_teoricos,cuantiles_teoricos , linestyle='-', color='red')
+    plt.show()
+
+  def estudio_supuestos(self):
+    ''' Estudia los supuestos de homocedasticidad y normalidad de los errores.
+      - Ejecuta:
+        - gráfico scatter residuos vs. predichos (homo)
+        - het_breuschpagan (homo)
+        - miqqplot (norm)
+        - shapiro (norm)
+    '''
+    if self.resultado_m is None or self.resultado_M is None:
+      self._ajustar_modelos()
+    predichos = self.resultado_M.fittedvalues
+    residuos = self.resultado_M.resid
+    X = sm.add_constant(self.x)
+
+    ## Gráfico de los residuos vs los valores predichos
+    # Homocedasticidad: H0: s_i = s_j, i,j niveles.
+
+    plt.scatter(predichos, residuos)
+    plt.axhline(y=0, color='r', linestyle='--')  # Línea horizontal en y=0 para facilitar la visualización de los residuos
+
+    plt.xlabel('Valores predichos')
+    plt.ylabel('Residuos')
+    plt.title('Gráfico de Residuos vs. Valores Predichos')
+    plt.ylim(-10,10)
+    plt.show()
+
+    bp_test = het_breuschpagan(residuos, X)
+    bp_value = bp_test[1]
+    print("Valor p Homocedasticidad:", bp_value)
+    if bp_value<0.05:
+      print('Hay evidencia de heterocedasticidad: rechazo H0, las varianzas no son constantes')
+    else:
+      print('No hay evidencia de heterocedasticidad: no puedo rechazar H0, hay homocedasticidad, las varianzas son homogéneas.')
+
+    # Normalidad de los errores
+    miqqplot(residuos)
+
+    stat, p_valor1 = shapiro(residuos)
+    print("Valor p normalidad:", p_valor1)
+    if p_valor1<0.05:
+      print('Hay evidencia para rechazar la normalidad de los errores.')
+    else:
+      print('No hay evidencia para rechazar la normalidad de los errores: acepto normalildad.')
