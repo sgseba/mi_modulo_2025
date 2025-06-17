@@ -377,163 +377,289 @@ class RegresionLinealSimple():
       self.int_pred = prediccion.conf_int(obs=True, alpha=alfa)
       print("Intervalo de predicción para la respuesta a UN valor nuevo:", self.int_pred)
 
+# 17-06-25: agregué chequear_supuestos
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
+from statsmodels.stats.diagnostic import het_breuschpagan, het_white
+from scipy.stats import shapiro
+from statsmodels.stats.stattools import durbin_watson
+
 
 class RegresionLineal:
     ''' Implementa Regresion Lineal Simple y Múltiple como clases hijas de Regresion Linal.
+    - Recibe:
+        - 2 arrays/series/dataframe (respuesta y predictoras)
 
+    - Ejemplo de uso (Múltiple):
+        respuesta = df['stack.loss']
+        predictoras = df[['Air.Flow','Water.Temp','Acid.Conc.']] # dataframe
+        modelo = RegresionLinealMultiple(respuesta, predictoras)
+        resultado_ajuste = modelo.ajustar_modelo_sm()
+        modelo.mostrar_ajuste_sm()
+        modelo.chequear_supuestos()
     '''
     def __init__(self, y, x):
-      # x = variables predictora/s
-      # y = variable respuesta
-      if len(x) != len(y):
-          print('Los datos no tienen la misma longitud.')
-          return
+        # x = variables predictora/s
+        # y = variable respuesta
+        # Guardamos la versión original si x o y son DataFrame o Series
+        if isinstance(x, pd.DataFrame):
+            self.df_x = x.copy()
+        else:
+            self.df_x = None
 
-      self.x = np.asarray(x, dtype=float)
-      self.y = np.asarray(y, dtype=float)
-      self.resumen_ajuste_sm = None
+        if isinstance(y, (pd.DataFrame, pd.Series)):
+            self.df_y = y.copy()
+        else:
+            self.df_y = None
+
+        # Convertimos a arrays para asegurar el funcionamiento numérico
+
+        if len(x) != len(y):
+            print('Los datos no tienen la same length.')
+            return
+
+        self.x = np.asarray(x, dtype=float)
+        self.y = np.asarray(y, dtype=float)
+        self.resumen_ajuste_sm = None
 
     def mostrar_estadisticas(self):
-      # Muestra estadísticas de y solamente
-      n = len(self.y)
-      media_y = sum(self.y)/n
-      varianza_y = sum((self.y-media_y)**2/(n-1))
-      min_y = min(self.y)
-      max_y = max(self.y)
-      print(f'Cantidad de datos: {n}.')
-      print(f'Media de y       : {media_y}.')
-      print(f'Varianza muestral de y    : {varianza_y}.')
-      print(f'Desvío std muestral de y  : {varianza_y**0.5}')
-      print(f'Rango de y       : [{min_y},{max_y}]')
+        # Muestra estadísticas de y solamente
+        n = len(self.y)
+        media_y = sum(self.y)/n
+        varianza_y = sum((self.y-media_y)**2/(n-1))
+        min_y = min(self.y)
+        max_y = max(self.y)
+        print(f'Cantidad de datos: {n}.')
+        print(f'Media de y       : {media_y}.')
+        print(f'Varianza muestral de y    : {varianza_y}.')
+        print(f'Desvío std muestral de y  : {varianza_y**0.5}')
+        print(f'Rango de y       : [{min_y},{max_y}]')
 
     def ajustar_modelo_sm(self):
-      # Estimo modelo de regresión lineal
-      # Genero result, ajustados y resumen (diccionario)
-      self.X = sm.add_constant(self.x,prepend=True)      #Aseguro que b0 sea el primero en params
-      self.modelo_sm = sm.OLS(self.y, self.X)
-      self.result_sm = self.modelo_sm.fit()
-      self.ajustados = np.dot(self.X, self.result_sm.params)
-      # podría usar result_sm.fittedvalues, es lo mismo
+        # Estimo modelo de regresión lineal
+        # Genero result, ajustados y resumen (diccionario)
+        self.X = sm.add_constant(self.x,prepend=True)      #Aseguro que b0 sea el primero en params
+        self.modelo_sm = sm.OLS(self.y, self.X)
+        self.result_sm = self.modelo_sm.fit()
+        self.ajustados = self.result_sm.fittedvalues
+        # podría usar np.dot(self.X, self.result_sm.params), es lo mismo
 
-      self.resumen_ajuste_sm ={'betas': self.result_sm.params,
-                            'p_valores': self.result_sm.pvalues,
-                            'predichos': self.ajustados,
-                            'r2_ajustado': self.result_sm.rsquared_adj,
-                            'resultado': self.result_sm,
-                            'summary': self.result_sm.summary()}
+        self.resumen_ajuste_sm ={'betas': self.result_sm.params,
+                              'p_valores': self.result_sm.pvalues,
+                              'predichos': self.ajustados,
+                              'r2_ajustado': self.result_sm.rsquared_adj,
+                              'resultado': self.result_sm,
+                              'summary': self.result_sm.summary()}
 
     def mostrar_ajuste_sm(self):
       print(self.resumen_ajuste_sm['summary'])
 
+    def chequear_supuestos(self, alfa=0.05):
+        """Método para chequear los supuestos de un modelo de regresión.
+        Se evalúan:
+          - Linealidad (gráfico de residuos vs. valores ajustados)
+          - Independencia de errores (Durbin-Watson)
+          - Homoscedasticidad (test de Breusch-Pagan)
+          - Normalidad de los errores (Q-Q plot y Shapiro-Wilk)
+
+        """
+        if self.resumen_ajuste_sm is None:
+            print("El modelo aún no ha sido ajustado. Ejecuta 'ajustar_modelo_sm()' primero.")
+            return
+
+
+          # Determinar nombres para las variables predictoras
+        if isinstance(self.df_x, pd.DataFrame):
+            x_labels = self.df_x.columns.tolist()
+        elif self.x.ndim > 1:
+            x_labels = [f"X{i}" for i in range(self.x.shape[1])]
+        else:
+            x_labels = ["X"]
+
+        #  Determinar etiqueta para la variable respuesta
+        if isinstance(self.df_y, pd.Series):
+            y_label = self.df_y.name if self.df_y.name is not None else "Y"
+        elif isinstance(self.df_y, pd.DataFrame):
+            y_label = self.df_y.columns.tolist()[0]
+        else:
+            y_label = "Y"
+
+
+
+        residuos = self.resumen_ajuste_sm['resultado'].resid
+        params = self.resumen_ajuste_sm['betas']
+        ajustados = self.resumen_ajuste_sm['predichos']
+
+        # 0. Linealidad: gráfico de respuesta vs cada predictora.
+        plt.figure(figsize=(8, 5))
+        for i, predictora in enumerate(x_labels, 1):
+            plt.subplot(1, len(x_labels), i)
+            if isinstance(self.df_x, pd.DataFrame):
+              plt.scatter(self.df_x[predictora], self.y)
+            else:
+              # Asumiendo que self.x es un array 2D
+              plt.scatter(self.x[:, i-1], self.y)
+            plt.xlabel(predictora)
+            plt.ylabel(y_label)
+            plt.title(f'{predictora} vs. {y_label}')
+
+        #plt.tight_layout()
+        plt.show()
+
+
+
+        # 1. Linealidad y Homoscedasticidad: gráfico de residuos vs. valores ajustados
+        print('Gráfico de residuos vs. valores ajustados, para linealidad y homocedasticidad.')
+        plt.figure(figsize=(10, 6))
+        plt.scatter(ajustados, residuos, alpha=0.7)
+        plt.axhline(y=0, color='red', linestyle='--')
+        plt.xlabel("Valores Ajustados")
+        plt.ylabel("Residuos")
+        plt.title("Residuos vs. Valores Ajustados")
+        plt.show()
+
+        # 2. Independencia: Estadístico Durbin-Watson
+        dw = durbin_watson(residuos)
+        print(f'Durbin-Watson (0-4, ideal=cercano a 2) para independencia de los errores: {dw}')
+        if dw < 1.5:
+            print("Los residuos están correlecionados +.")
+        elif dw >2.5:
+            print("Los residuos están correlacionados -.")
+        else:
+            print("Los residuos no están correlacionados.")
+
+        # 3. Homoscedasticidad: Test de Breusch-Pagan (además del scatter de residuos vs. ajustados, visto en linealidad)
+        print('Gráfico de residuos vs. valores ajustados, está antes, en linealidad.')
+        alfa = 0.05
+        bp_test = het_breuschpagan(residuos, self.X)
+        bp_stat = bp_test[0]
+        bp_pvalue = bp_test[1]
+        print("Test de Breusch-Pagan:")
+        print("  Estadístico:", bp_stat)
+        print("  p-valor:", bp_pvalue)
+        if bp_pvalue < alfa:
+            print("  Se rechaza la hipotesis de homocedasticidad con alfa=",alfa)
+        else:
+            print("  No se rechaza la hipótesis de homocedasticidad on alfa=",alfa)
+
+        # 4. Normalidad de los errores: Q-Q plot y Shapiro-Wilk
+        sm.qqplot(residuos, line="s")
+        plt.title("Q-Q Plot de los residuos")
+        plt.show()
+
+        stat, p_shapiro = shapiro(residuos)
+        print("Test de Shapiro-Wilk para normalidad de los errores:")
+        print("  Estadístico:", stat)
+        print("  p-valor:", p_shapiro)
+        if p_shapiro < alfa:
+            print("  Se rechaza la normalidad de los errores.")
+        else:
+            print("  No se rechaza la normalidad de los errores.")
+
+
 class RegresionLinealSimple(RegresionLineal):
     def __init__(self, y, x):
-      super().__init__(y, x)
-      if self.x.ndim != 1:
-        print('x debe ser un vector.')
-        return
+        super().__init__(y, x)
+        # Si x es un array 2D con una sola columna, se "aplana"
+        if self.x.ndim == 2 and self.x.shape[1] == 1:
+            self.x = self.x.squeeze()
+        if self.x.ndim != 1:
+            print('x debe ser un vector 1D.')
+            return
 
-   def predecir(self, new_x):
-    #new_x es un valor puntual
-      new_X = np.array([1,new_x])
-      self.y_nuevo = np.dot(new_X, self.result_sm.params)
-      print("Respuesta estimada para x_new:", self.y_nuevo)
-      return self.y_nuevo
+    def predecir(self, new_x):
+        # el new_x pasado debe ser escalar. Devuelve y_nuevo escalar.
+        new_X = np.array([1,new_x])
+        self.y_nuevo = np.dot(new_X, self.result_sm.params)
+        print("Respuesta estimada para x_new:", self.y_nuevo)
+        return self.y_nuevo
 
     def predecir_sm(self, new_x, alfa = 0.05):
-      new_X = np.array([1,new_x])
-      self.prediccion_sm = self.result_sm.get_prediction(new_X, alpha=alfa)
-      self.y_nuevo_sm = self.prediccion_sm.predicted_mean[0]
-      self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)[0]
-      self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)[0]
+        # new_x debe ser escalar. Devuelve diccionario con y_estimado escalar, int conf, int pred.
+        if self.resumen_ajuste_sm is None:
+          print('Debe ajustar el modelo antes de predecir.')
+          return
+        new_X = np.array([1,new_x])
+        self.prediccion_sm = self.result_sm.get_prediction(new_X, alpha=alfa)
+        self.y_nuevo_sm = self.prediccion_sm.predicted_mean[0]
+        self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)[0]
+        self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)[0]
 
-      self.resumen_prediccion_sm = {'x_nuevo':new_x,
-                            'y_estimado':self.y_nuevo_sm,
-                            'int. conf. y_estimado':self.intervalo_confianza_y_nuevo_sm,
-                            'int. pred. y_estimado':self.intervalo_prediccion_y_nuevo_sm}
-      return self.resumen_prediccion_sm
+        self.resumen_prediccion_sm = {'x_nuevo':new_x,
+                              'y_estimado':self.y_nuevo_sm,
+                              'int. conf. y_estimado':self.intervalo_confianza_y_nuevo_sm,
+                              'int. pred. y_estimado':self.intervalo_prediccion_y_nuevo_sm}
+        return self.resumen_prediccion_sm
 
     def mostrar_prediccion_sm(self):
-      print(self.resumen_prediccion_sm)
+        if self.resumen_prediccion_sm is None:
+            print("No se ha realizado ninguna predicción con .predecir_sm.")
+            return
+        print(self.resumen_prediccion_sm)
 
     def graficar_recta_ajustada(self, label_x='x', label_y='y'):
-    # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
-    if self.resumen_ajuste_sm is None:
-      print('Debe ajustar el modelo antes de graficar.')
-      return
+      # Grafica los puntos de los datos originales y la recta de mejor ajuste por mínimos cuadrados obtenida por regresión lineal simple.
+      if self.resumen_ajuste_sm is None:
+        print('Debe ajustar el modelo antes de graficar.')
+        return
 
-    y_estimada = self.resumen_ajuste_sm['predichos']
+      y_estimada = self.resumen_ajuste_sm['predichos']
 
-    plt.figure(figsize=(10, 6))
-    plt.scatter(self.x, self.y, label="Datos")
-    plt.plot(self.x, self.y_estimada, label="Recta Estimada", linestyle="--", color="green")
-    plt.xlabel('Predictora x')
-    plt.ylabel('Respuesta y')
-    plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
-    plt.legend()
-    plt.show()
+      plt.figure(figsize=(10, 6))
+      plt.scatter(self.x, self.y, label="Datos")
+      plt.plot(self.x, y_estimada, label="Recta Estimada", linestyle="--", color="green")
+      plt.xlabel('Predictora x')
+      plt.ylabel('Respuesta y')
+      plt.title("Gráfico de Dispersión con Recta de Mejor Ajuste")
+      plt.legend()
+      plt.show()
 
 class RegresionLinealMultiple(RegresionLineal):
     def __init__(self, y, x):
-      super().__init__(y, x)
-      if self.x.ndim != 2:
-        print('x debe ser una matriz.')
-        return
-
-    def predecir_sm(self, new_x, alfa=0.05):
-
-      #new_x debe ser np.array([1,valores])
-
-      self.prediccion_sm = self.result_sm.get_prediction(new_x)
-
-      self.y_nuevo_sm = self.prediccion_sm.predicted_mean
-
-      self.intervalo_confianza_y_nuevo_sm = self.prediccion_sm.conf_int(alpha=alfa)
-
-      self.intervalo_prediccion_y_nuevo_sm = self.prediccion_sm.conf_int(obs=True,alpha=alfa)
-
-      return self.y_nuevo_sm, self.intervalo_confianza_y_nuevo_sm, self.intervalo_prediccion_y_nuevo_sm
+        super().__init__(y, x)
+        if self.x.ndim != 2:
+          print('x debe ser una matriz.')
+          return
 
     def predecir_sm(self, new_x, alfa= 0.05):
+        #
+        if new_x.ndim == 1:
+            new_x = new_x.reshape(1, -1)
 
-      if new_x.ndim == 1:
-          new_x = new_x.reshape(1, -1)
-
-      new_X = sm.add_constant(new_x, prepend=True)
+        new_X = sm.add_constant(new_x, prepend=True)
 
 
-      prediccion = self.result_sm.get_prediction(new_X, alpha=alfa)
+        prediccion = self.result_sm.get_prediction(new_X, alpha=alfa)
 
-      self.y_nuevo_sm = prediccion.predicted_mean
-      self.intervalo_confianza_y_nuevo_sm = prediccion.conf_int(alpha=alfa)
-      self.intervalo_prediccion_y_nuevo_sm = prediccion.conf_int(obs=True, alpha=alfa)
+        self.y_nuevo_sm = prediccion.predicted_mean
+        self.intervalo_confianza_y_nuevo_sm = prediccion.conf_int(alpha=alfa)
+        self.intervalo_prediccion_y_nuevo_sm = prediccion.conf_int(obs=True, alpha=alfa)
 
-      self.resumen_prediccion_sm = {
-          'y_estimado': self.y_nuevo_sm,
-          'int. conf. y_estimado': self.intervalo_confianza_y_nuevo_sm,
-          'int. pred. y_estimado': self.intervalo_prediccion_y_nuevo_sm
-      }
+        self.resumen_prediccion_sm = {
+            'y_estimado': self.y_nuevo_sm,
+            'int. conf. y_estimado': self.intervalo_confianza_y_nuevo_sm,
+            'int. pred. y_estimado': self.intervalo_prediccion_y_nuevo_sm
+        }
 
-      return self.resumen_prediccion_sm
+        return self.resumen_prediccion_sm
 
     def mostrar_prediccion_sm(self):
-      """Muestra el diccionario de resultados de la última predicción de statsmodels."""
-      if self.resumen_prediccion_sm is None:
-          print("No se ha realizado ninguna predicción con statsmodels.")
-          return
-      print("--- Resultados de Predicción ---")
-      df_pred = pd.DataFrame({
-          'Y Predicho': self.resumen_prediccion_sm['y_estimado'],
-          'IC Inferior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 0],
-          'IC Superior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 1],
-          'IP Inferior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 0],
-          'IP Superior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 1]
-      })
-      print(df_pred.to_string())
+        """Muestra el diccionario de resultados de la última predicción de statsmodels."""
+        if self.resumen_prediccion_sm is None:
+            print("No se ha realizado ninguna predicción con statsmodels.")
+            return
+        print("--- Resultados de Predicción ---")
+        df_pred = pd.DataFrame({
+            'Y Predicho': self.resumen_prediccion_sm['y_estimado'],
+            'IC Inferior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 0],
+            'IC Superior': self.resumen_prediccion_sm['int. conf. y_estimado'][:, 1],
+            'IP Inferior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 0],
+            'IP Superior': self.resumen_prediccion_sm['int. pred. y_estimado'][:, 1]
+        })
+        print(df_pred.to_string())
 
 import random
 # Funciona OK. 02-06-25
@@ -859,6 +985,27 @@ class mi_test_chi2:
     print("-------------------")
     print(resultado['informe'])
 
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+def grafico_factor(data):
+  ''' Grafica boxplot de la respuesta vs niveles del factor.
+    PREVIO A ANOVA.
+    - Recibe: DATAFRAME 2 columnas (respuesta y,predictora x)
+    - Devuelve: gráfico boxplot.
+    - Ejemplo de uso:
+      datos= pd.read_csv(camino+'dengue.csv', sep=';')
+      dengue = pd.DataFrame(datos)
+      grafico_factor(dengue)
+  '''
+  plt.figure(figsize=(8, 6))
+  respuesta_label = data.columns[0]
+  predictora_label = data.columns[1]
+  sns.boxplot(data=data, x=predictora_label, y=respuesta_label);
+  plt.ylabel(respuesta_label)
+  plt.title(f'Distribución de {respuesta_label} por {predictora_label}')
+  plt.show()
+
 import numpy as np
 import pandas as pd
 from scipy.stats import t
@@ -956,7 +1103,7 @@ from statsmodels.stats.diagnostic import het_breuschpagan, het_white
 import matplotlib.pyplot as plt
 import pandas as pd
 
-#16-06-25 16:25
+#16-06-25 16:55
 class mi_anova_lm:
   ''' Clase para realizar ANOVA de un factor: incidencia de factores de una variable predictora en la variabilidad de una variable dependiente.
 
@@ -1031,8 +1178,8 @@ class mi_anova_lm:
     x_d=pd.get_dummies(self.x,drop_first=True).astype(int)
 
     #Hago regresión lineal con las predictoras: modelo_M
-    X_d = sm.add_constant(x_d)
-    self.modelo_M = sm.OLS(self.y, X_d)
+    self.X_d = sm.add_constant(x_d)
+    self.modelo_M = sm.OLS(self.y, self.X_d)
     self.resultado_M= self.modelo_M.fit()
 
     # Hago regresión para el modelo sin el factor: modelo_m
@@ -1087,7 +1234,7 @@ class mi_anova_lm:
                         'Esto sugiere que el factor NO tiene un efecto significativo sobre la variable dependiente.')
     print(self.informe)
 
-  def miqqplot(data):
+  def _miqqplot(self,data):
     #Crea qqplot manualmente.
 
     media = np.mean(data)
@@ -1117,7 +1264,6 @@ class mi_anova_lm:
       self._ajustar_modelos()
     predichos = self.resultado_M.fittedvalues
     residuos = self.resultado_M.resid
-    X = sm.add_constant(self.x)
 
     ## Gráfico de los residuos vs los valores predichos
     # Homocedasticidad: H0: s_i = s_j, i,j niveles.
@@ -1131,7 +1277,7 @@ class mi_anova_lm:
     plt.ylim(-10,10)
     plt.show()
 
-    bp_test = het_breuschpagan(residuos, X)
+    bp_test = het_breuschpagan(residuos, self.X_d)
     bp_value = bp_test[1]
     print("Valor p Homocedasticidad:", bp_value)
     if bp_value<0.05:
@@ -1140,7 +1286,7 @@ class mi_anova_lm:
       print('No hay evidencia de heterocedasticidad: no puedo rechazar H0, hay homocedasticidad, las varianzas son homogéneas.')
 
     # Normalidad de los errores
-    miqqplot(residuos)
+    self._miqqplot(residuos)
 
     stat, p_valor1 = shapiro(residuos)
     print("Valor p normalidad:", p_valor1)
